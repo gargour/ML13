@@ -1,0 +1,4 @@
+venv\Scripts\activate
+python train.py
+
+python -m mlflow ui --backend-store-uri file:./mlruns

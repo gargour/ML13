@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Flights Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #0b1120;
+            --bg-card: rgba(22, 30, 49, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-cyan: #00f0ff;
+            --accent-purple: #a855f7;
+            --accent-orange: #ff6b35;
+        }
+
+        body {
+            margin: 0; font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-main); color: var(--text-main);
+            background-image: radial-gradient(at 0% 0%, rgba(0, 240, 255, 0.08) 0px, transparent 50%);
+        }
+
+        .app { max-width: 1200px; margin: auto; padding: 40px 20px; }
+        header { text-align: center; margin-bottom: 40px; }
+        h1 { font-size: 2.5rem; background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .actions-bar { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        .btn { 
+            display: inline-flex; align-items: center; gap: 10px; padding: 12px 24px; 
+            border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 0.9rem;
+            transition: all 0.3s ease; cursor: pointer; border: 1px solid transparent;
+        }
+        .btn svg { width: 18px; height: 18px; }
+
+        .btn-mlflow { background: rgba(0, 240, 255, 0.05); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+        .btn-mlflow:hover { background: var(--accent-cyan); color: #000; box-shadow: 0 0 20px rgba(0, 240, 255, 0.2); }
+
+        .btn-results { background: rgba(168, 85, 247, 0.1); color: var(--accent-purple); border-color: var(--accent-purple); }
+        .btn-results:hover { background: var(--accent-purple); color: #fff; box-shadow: 0 0 20px rgba(168, 85, 247, 0.2); }
+
+        /* NOUVEAU BOUTON ORANGE */
+        .btn-comparison { background: rgba(255, 107, 53, 0.1); color: var(--accent-orange); border-color: var(--accent-orange); }
+        .btn-comparison:hover { background: var(--accent-orange); color: #fff; box-shadow: 0 0 20px rgba(255, 107, 53, 0.3); transform: translateY(-3px); }
+
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }
+        .card { background: var(--bg-card); backdrop-filter: blur(12px); padding: 25px; border-radius: 20px; border: 1px solid var(--border-color); }
+        .value { font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
+        #accuracy { color: #10b981; }
+
+        .chart-box { background: var(--bg-card); padding: 30px; border-radius: 20px; border: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <h1>Dashboard Prédiction ML ✈️</h1>
+        <p>Analyse des retards et performances des modèles</p>
+        
+        <div class="actions-bar">
+            <a href="http://127.0.0.1:5050" target="_blank" class="btn btn-mlflow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                MLflow Tracking
+            </a>
+
+            <button onclick="handleComparison()" id="btnComp" class="btn btn-comparison">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h2m10 0V4a2 2 0 00-2-2h-8a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-1M18 10l-4 4m0-4l4 4"/></svg>
+                Voir Comparaison
+            </button>
+
+            <a href="http://127.0.0.1:5500/FrontEnd/Pages/Results.html" class="btn btn-results">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z"/></svg>
+                Détails ROC/Confusion
+            </a>
+        </div>
+    </header>
+
+    <div class="cards">
+        <div class="card"><h3>Total Vols</h3><div class="value" id="totalFlights">...</div></div>
+        <div class="card"><h3>Taux de Retard</h3><div class="value" id="delayRate">...</div></div>
+        <div class="card"><h3>Accuracy (RF)</h3><div class="value" id="accuracy">...</div></div>
+    </div>
+
+    <div class="chart-box">
+        <h2>📊 Évolution Mensuelle des Retards</h2>
+        <div style="height: 350px;"><canvas id="chart"></canvas></div>
+    </div>
+</div>
+
+<script>
+    const API = "http://127.0.0.1:5000";
+
+    async function handleComparison() {
+        const btn = document.getElementById('btnComp');
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Calcul...";
+        try {
+            const res = await fetch(API + "/model/generate-comparison", { method: 'POST' });
+            if(res.ok) window.open(API + "/model/view-report", "_blank");
+        } catch(e) { alert("Erreur serveur"); }
+        finally { btn.disabled = false; btn.innerHTML = "Voir Comparaison"; }
+    }
+
+    async function loadStats() {
+        const res = await fetch(API + "/dashboard/stats");
+        const data = await res.json();
+        document.getElementById("totalFlights").innerText = data.total_flights.toLocaleString();
+        document.getElementById("delayRate").innerText = data.delay_rate + "%";
+        document.getElementById("accuracy").innerText = data.model_accuracy + "%";
+    }
+
+    async function loadChart() {
+        const res = await fetch(API + "/dashboard/monthly");
+        const data = await res.json();
+        new Chart(document.getElementById("chart"), {
+            type: "line",
+            data: {
+                labels: data.labels,
+                datasets: [{ label: "Retards %", data: data.delay_rate, borderColor: "#00f0ff", tension: 0.4, fill: true }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    window.onload = () => { loadStats(); loadChart(); };
+</script>
+</body>
+</html>

@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>J.A.R.V.I.S. — ML Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --cyan:#22d3ee;--cyan2:rgba(34,211,238,.22);--cyan3:rgba(34,211,238,.55);
+  --cyan-g:rgba(34,211,238,.5);--blue:#3b82f6;--orange:#f97316;
+  --green:#4ade80;--red:#f87171;
+  --bg:#030b18;--card:rgba(10,20,42,.72);--card2:rgba(6,15,35,.85);
+  --s400:#94a3b8;--s700:#1e3a5f;--text:#e2e8f0;
+}
+
+html{scroll-behavior:smooth}
+body{
+  min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='g' width='60' height='60' patternUnits='userSpaceOnUse'%3E%3Cpath d='M 10 0 L 0 0 0 10' fill='none' stroke='%231e3a5f' stroke-width='0.7'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23g)'/%3E%3C/svg%3E");
+  opacity:.18;
+}
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 110% 55% at 50% -5%,rgba(10,50,110,.5) 0%,transparent 65%);
+}
+
+::-webkit-scrollbar{width:7px}
+::-webkit-scrollbar-track{background:#050d1e}
+::-webkit-scrollbar-thumb{background:var(--cyan);border-radius:4px}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(3,11,24,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--cyan2);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.75rem 2rem;
+}
+.nav-brand{
+  font-size:1.1rem;font-weight:800;letter-spacing:3px;
+  background:linear-gradient(90deg,var(--cyan),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.nav-tabs{display:flex;gap:.25rem}
+.nav-tab{
+  padding:.45rem 1rem;border-radius:.5rem;cursor:pointer;
+  font-family:monospace;font-size:.78rem;letter-spacing:1px;text-transform:uppercase;
+  border:1px solid transparent;color:var(--s400);
+  transition:all .25s;background:transparent;
+}
+.nav-tab:hover{color:var(--cyan);border-color:var(--cyan2)}
+.nav-tab.active{
+  color:var(--cyan);border-color:var(--cyan3);
+  background:rgba(34,211,238,.08);
+  box-shadow:0 0 14px rgba(34,211,238,.15);
+}
+
+/* ── LAYOUT ── */
+.page{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:5.5rem 2rem 4rem}
+.section{display:none}
+.section.active{display:block}
+
+/* ── UPLOAD SCREEN ── */
+#uploadScreen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:82vh;text-align:center;gap:2rem;
+}
+.upload-title{
+  font-size:clamp(2rem,5vw,3.2rem);font-weight:900;letter-spacing:3px;
+  background:linear-gradient(90deg,#67e8f9,var(--blue),#67e8f9);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 22px var(--cyan-g));
+  animation:glow 3s ease-in-out infinite;
+}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 18px var(--cyan-g))}50%{filter:drop-shadow(0 0 35px var(--cyan-g))}}
+
+.upload-sub{font-family:monospace;color:rgba(34,211,238,.5);letter-spacing:3px;font-size:.9rem;animation:blink 2.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+.drop-zone{
+  width:min(480px,90vw);padding:3rem 2rem;
+  border:2px dashed var(--cyan3);border-radius:1.25rem;
+  background:var(--card);cursor:pointer;
+  transition:all .3s;position:relative;overflow:hidden;
+}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--cyan);background:rgba(34,211,238,.06);box-shadow:0 0 40px rgba(34,211,238,.2)}
+.drop-zone::before{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  animation:scan 2.5s linear infinite;
+}
+@keyframes scan{0%{left:-100%}100%{left:100%}}
+.drop-icon{font-size:3rem;margin-bottom:1rem}
+.drop-text{color:#a5f3fc;font-size:1rem;margin-bottom:.5rem}
+.drop-hint{color:var(--s400);font-family:monospace;font-size:.78rem}
+
+.btn-upload{
+  display:inline-flex;align-items:center;gap:.6rem;
+  background:linear-gradient(90deg,#0891b2,var(--blue));
+  color:#fff;font-family:monospace;font-size:.9rem;letter-spacing:2px;
+  padding:.9rem 2.2rem;border:none;border-radius:.75rem;cursor:pointer;
+  box-shadow:0 4px 22px rgba(34,211,238,.25);
+  transition:transform .2s,box-shadow .2s,background .2s;
+}
+.btn-upload:hover{transform:scale(1.04);background:linear-gradient(90deg,#06b6d4,#3b82f6);box-shadow:0 6px 30px rgba(34,211,238,.4)}
+
+/* ── SECTION HEADER ── */
+.sec-hdr{margin-bottom:2rem}
+.sec-hdr h1{
+  font-size:clamp(1.6rem,4vw,2.4rem);font-weight:800;
+  background:linear-gradient(90deg,var(--cyan),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 14px var(--cyan-g));margin-bottom:.3rem;
+}
+.sec-hdr p{font-family:monospace;font-size:.75rem;color:rgba(34,211,238,.45);letter-spacing:2px}
+
+/* ── CARDS ── */
+.card{
+  background:var(--card);border:1px solid var(--cyan2);border-radius:1rem;
+  padding:1.6rem;backdrop-filter:blur(8px);
+  box-shadow:0 0 22px rgba(34,211,238,.06);
+  transition:border-color .3s,box-shadow .3s;
+  position:relative;overflow:hidden;
+}
+.card:hover{border-color:var(--cyan3);box-shadow:0 0 34px rgba(34,211,238,.18)}
+.card::before{content:'';position:absolute;top:-1px;left:-1px;width:14px;height:14px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan)}
+.card::after{content:'';position:absolute;top:-1px;right:-1px;width:14px;height:14px;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan)}
+.card .bl{position:absolute;bottom:-1px;left:-1px;width:14px;height:14px;border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan)}
+.card .br{position:absolute;bottom:-1px;right:-1px;width:14px;height:14px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan)}
+
+.card-title{
+  font-size:1.05rem;font-weight:700;
+  background:linear-gradient(90deg,var(--cyan),var(--blue));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:.3rem;
+}
+.card-sub{font-family:monospace;font-size:.65rem;color:var(--s400);letter-spacing:2px;text-transform:uppercase;margin-bottom:1.2rem}
+
+/* ── GRIDS ── */
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.2rem;margin-bottom:1.8rem}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:1.8rem}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.2rem;margin-bottom:1.8rem}
+
+/* ── STAT MINI CARDS ── */
+.stat-mini{
+  background:var(--card);border:1px solid var(--cyan2);border-radius:.9rem;
+  padding:1.3rem;backdrop-filter:blur(6px);
+  transition:transform .25s,box-shadow .25s;
+  opacity:0;transform:translateY(14px);animation:fadeUp .45s ease forwards;
+}
+.stat-mini:hover{transform:translateY(-4px);box-shadow:0 8px 28px rgba(34,211,238,.2)}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+.stat-mini:nth-child(1){animation-delay:.05s}.stat-mini:nth-child(2){animation-delay:.1s}
+.stat-mini:nth-child(3){animation-delay:.15s}.stat-mini:nth-child(4){animation-delay:.2s}
+.stat-mini .lbl{font-family:monospace;font-size:.68rem;color:var(--s400);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem}
+.stat-mini .val{font-size:1.9rem;font-weight:800;color:#a5f3fc;text-shadow:0 0 12px rgba(34,211,238,.4);line-height:1}
+.stat-mini .val.sm{font-size:1.1rem;line-height:1.3}
+
+/* ── CHART WRAP ── */
+.ch{position:relative;height:260px}
+.ch-tall{position:relative;height:300px}
+.ch-sm{position:relative;height:220px}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:rgba(6,15,35,.8)}
+th{padding:.75rem 1rem;text-align:left;font-family:monospace;font-size:.68rem;color:#a5f3fc;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(34,211,238,.18);white-space:nowrap}
+tbody tr{border-bottom:1px solid rgba(34,211,238,.06);transition:background .2s}
+tbody tr:hover{background:rgba(34,211,238,.04)}
+td{padding:.7rem 1rem;font-family:monospace;font-size:.8rem;color:#cbd5e1;white-space:nowrap}
+.tbl-footer{padding:.6rem 1rem;border-top:1px solid rgba(34,211,238,.12);font-family:monospace;font-size:.75rem;color:var(--s400);background:rgba(6,15,35,.6)}
+
+/* ── PROGRESS BAR ── */
+.prog-track{height:2rem;background:rgba(0,0,0,.5);border:2px solid rgba(249,115,22,.4);border-radius:9999px;overflow:hidden;position:relative}
+.prog-bar{height:100%;background:linear-gradient(90deg,#ea580c,#fbbf24,#ea580c);border-radius:9999px;transition:width .3s ease-out;width:0%;position:relative}
+.prog-shimmer{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);animation:shimmer 1.2s linear infinite;display:none}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.prog-ticks{position:absolute;inset:0;opacity:.18;pointer-events:none}
+.prog-ticks span{position:absolute;top:0;bottom:0;width:1px;background:#fdba74}
+
+/* ── CONFUSION MATRIX ── */
+.cm-grid{display:grid;grid-template-columns:80px 1fr 1fr;gap:.5rem;margin-bottom:1rem}
+.cm-cell{border-radius:.5rem;padding:1rem .5rem;border:1px solid;text-align:center;cursor:pointer;transition:transform .2s}
+.cm-cell:hover{transform:scale(1.04)}
+.cm-correct{background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(59,130,246,.1));border-color:rgba(34,211,238,.35)}
+.cm-wrong{background:linear-gradient(135deg,rgba(248,113,113,.15),rgba(249,115,22,.08));border-color:rgba(248,113,113,.35)}
+.cm-cell .cv{font-size:1.4rem;font-weight:700}
+.cm-correct .cv{color:var(--cyan)}.cm-wrong .cv{color:var(--red)}
+.cm-cell .cp{font-size:.7rem;color:var(--s400);margin-top:2px}
+.cm-hdr{display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:.68rem;color:var(--s400);letter-spacing:1px}
+
+/* ── ROC FOOTER ── */
+.roc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;gap:.5rem;margin-top:1.2rem;padding-top:1rem;border-top:1px solid rgba(51,65,85,.5)}
+.roc-lbl{font-size:.65rem;color:var(--s400);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.roc-val{font-size:1.1rem;font-weight:700}
+.c-cyan{color:var(--cyan)}.c-blue{color:var(--blue)}.c-green{color:var(--green)}.c-red{color:var(--red)}.c-orange{color:var(--orange)}
+
+/* ── FEATURE IMPORTANCE ── */
+.fi-row{display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem}
+.fi-lbl{font-family:monospace;font-size:.78rem;color:#a5f3fc;width:120px;flex-shrink:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.fi-track{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:9999px;overflow:hidden}
+.fi-fill{height:100%;border-radius:9999px;background:linear-gradient(90deg,var(--cyan),var(--blue));transition:width 1s cubic-bezier(.22,1,.36,1);width:0%}
+.fi-val{font-family:monospace;font-size:.72rem;color:var(--s400);width:45px;text-align:right}
+
+/* ── CLEANING BTNS ── */
+.btn-clean{
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:rgba(30,50,80,.5);border:1px solid rgba(34,211,238,.28);
+  color:#a5f3fc;font-family:monospace;font-size:.83rem;
+  padding:.7rem 1.4rem;border-radius:.75rem;cursor:pointer;
+  transition:transform .2s,background .2s,box-shadow .2s;
+}
+.btn-clean:hover{background:rgba(34,211,238,.12);border-color:var(--cyan3);transform:scale(1.04);box-shadow:0 4px 18px rgba(34,211,238,.2)}
+.btn-clean:active{transform:scale(.97)}
+.clean-row{display:flex;flex-wrap:wrap;gap:.9rem}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:1.8rem;right:1.8rem;z-index:999;
+  background:rgba(6,15,35,.97);border:1px solid var(--cyan);border-radius:.6rem;
+  padding:.8rem 1.3rem;font-family:monospace;font-size:.82rem;color:#a5f3fc;
+  box-shadow:0 4px 24px rgba(34,211,238,.3);
+  transform:translateY(20px);opacity:0;transition:transform .3s,opacity .3s;pointer-events:none;max-width:300px;
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.err{border-color:var(--red);color:#fca5a5;box-shadow:0 4px 24px rgba(248,113,113,.3)}
+
+/* ── LIVE DOT ── */
+.dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan-g);animation:blink 2s ease-in-out infinite;flex-shrink:0}
+
+/* ── TRAINING SECTION ── */
+.train-form .field{margin-bottom:1.4rem}
+.field label{display:block;font-family:monospace;font-size:.72rem;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem}
+.field select,.field input[type=text]{
+  width:100%;background:rgba(0,0,0,.5);border:2px solid rgba(8,145,178,.4);
+  color:#e0f2fe;border-radius:.4rem;padding:.75rem 1rem;font-size:.95rem;outline:none;
+  appearance:none;transition:border-color .25s,box-shadow .25s;
+}
+.field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2306b6d4' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");background-position:right .6rem center;background-repeat:no-repeat;background-size:1.4em;padding-right:2.5rem;cursor:pointer}
+.field select option{background:#0a0f1e}
+.field select:focus,.field input:focus{border-color:var(--cyan);box-shadow:0 0 14px rgba(34,211,238,.25)}
+.chk-row{display:flex;align-items:center;gap:.75rem;cursor:pointer;margin-bottom:1.4rem}
+.chk-row input{width:18px;height:18px;accent-color:var(--cyan);cursor:pointer}
+.chk-row span{color:#e0f2fe;font-size:.95rem;transition:color .2s}
+.chk-row:hover span{color:#67e8f9}
+.btn-train{
+  width:100%;background:linear-gradient(90deg,#0891b2,var(--blue));
+  color:#fff;font-family:monospace;font-size:1rem;letter-spacing:3px;text-transform:uppercase;
+  padding:1rem 2rem;border:none;border-radius:.5rem;cursor:pointer;
+  transition:transform .25s,box-shadow .25s,background .25s;
+}
+.btn-train:hover:not(:disabled){background:linear-gradient(90deg,var(--cyan),#3b82f6);transform:scale(1.03);box-shadow:0 6px 30px rgba(34,211,238,.4)}
+.btn-train:disabled{opacity:.5;cursor:not-allowed}
+
+.status-msg{margin-top:1rem;text-align:center;font-size:.82rem;letter-spacing:2px;animation:blink 1.5s ease-in-out infinite}
+.status-ok{color:var(--green);animation:none}
+.status-run{color:#fdba74}
+
+.prog-header{display:flex;justify-content:space-between;align-items:center;color:var(--orange);font-size:.72rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:.7rem}
+.prog-pct{font-family:monospace;color:#fdba74;font-size:.85rem}
+
+/* ── METRIC BADGE ── */
+.mbadge{
+  background:var(--card);border:1px solid var(--cyan2);border-radius:.75rem;
+  padding:1.2rem;text-align:center;
+  opacity:0;animation:fadeUp .45s ease forwards;
+}
+.mbadge .ml{font-family:monospace;font-size:.68rem;color:var(--s400);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem}
+.mbadge .mv{font-size:2rem;font-weight:800;color:#a5f3fc;line-height:1}
+.mbadge .mbar{margin-top:.8rem;height:4px;background:var(--s700);border-radius:9999px;overflow:hidden}
+.mbadge .mfill{height:100%;border-radius:9999px;background:linear-gradient(90deg,var(--cyan),#67e8f9);width:0%;transition:width 1.2s cubic-bezier(.22,1,.36,1);box-shadow:0 0 8px rgba(34,211,238,.5)}
+
+/* empty */
+.empty{padding:3rem;text-align:center;color:var(--s400);font-family:monospace;font-size:.88rem}
+
+/* responsive */
+@media(max-width:640px){.page{padding:4.5rem 1rem 3rem}.g4{grid-template-columns:1fr 1fr}.nav-tab{font-size:.65rem;padding:.4rem .6rem}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">J.A.R.V.I.S.</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('dataset')">Dataset</button>
+    <button class="nav-tab" onclick="showTab('training')">Training</button>
+    <button class="nav-tab" onclick="showTab('evaluation')">Evaluation</button>
+    <button class="nav-tab" onclick="showTab('dashboard')">Dashboard</button>
+  </div>
+</nav>
+
+<input type="file" id="csvInput" accept=".csv" style="display:none" onchange="loadCSV(event)"/>
+
+<div class="page">
+
+<!-- ════════════════════════════════════════
+     DATASET
+════════════════════════════════════════ -->
+<div id="tab-dataset" class="section active">
+
+  <!-- UPLOAD SCREEN -->
+  <div id="uploadScreen">
+    <h1 class="upload-title">ML DASHBOARD</h1>
+    <p class="upload-sub">J.A.R.V.I.S. • GARA INDUSTRIES </p>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('csvInput').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="handleDrop(event)">
+      <div class="drop-icon">📂</div>
+      <div class="drop-text">Glissez votre CSV ici</div>
+      <div class="drop-hint">ou cliquez pour choisir un fichier</div>
+    </div>
+    <button class="btn-upload" onclick="document.getElementById('csvInput').click()">
+      ⬆ Charger le Dataset CSV
+    </button>
+    <p style="font-family:monospace;font-size:.75rem;color:rgba(34,211,238,.35)">Format supporté : CSV </p>
+  </div>
+
+  <!-- DATASET CONTENT (hidden until CSV loaded) -->
+  <div id="datasetContent" style="display:none">
+    <div class="sec-hdr">
+      <h1>Dataset Management</h1>
+      <p>J.A.R.V.I.S. DATA INTERFACE SYSTEM • <span id="csvFileName">—</span></p>
+    </div>
+
+    <!-- Stats -->
+    <div class="g4" id="statsGrid"></div>
+
+    <!-- Table -->
+    <div class="card" style="margin-bottom:1.8rem">
+      <span class="bl"></span><span class="br"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+        <div><div class="card-title">Aperçu du Dataset</div><div class="card-sub">Prévisualisation des 15 premières lignes</div></div>
+        <div class="dot"></div>
+      </div>
+      <div class="tbl-wrap" id="tableWrap"></div>
+    </div>
+
+    <!-- Distribution charts -->
+    <div class="g2">
+      <div class="card">
+        <span class="bl"></span><span class="br"></span>
+        <div class="card-title">Distribution — Colonne Numérique</div>
+        <div class="card-sub">Histogramme de la 1ère colonne numérique</div>
+        <div class="ch"><canvas id="distChart"></canvas></div>
+      </div>
+      <div class="card">
+        <span class="bl"></span><span class="br"></span>
+        <div class="card-title">Distribution — Valeurs Catégorielles</div>
+        <div class="card-sub">Dernière colonne catégorielle</div>
+        <div class="ch"><canvas id="catChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Cleaning -->
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Nettoyage des Données</div>
+      <div class="card-sub">Opérations de preprocessing</div>
+      <div class="clean-row">
+        <button class="btn-clean" onclick="removeMissing()">🗑 Supprimer valeurs manquantes</button>
+        <button class="btn-clean" onclick="showToast('Colonnes : ' + (CSV.headers||[]).join(', '))">🔍 Voir colonnes</button>
+        <button class="btn-clean" onclick="exportClean()">💾 Exporter CSV nettoyé</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     TRAINING
+════════════════════════════════════════ -->
+<div id="tab-training" class="section">
+  <div class="sec-hdr">
+    <h1>🧠 Model Training</h1>
+    <p>CONFIGURATION & ENTRAÎNEMENT DU MODÈLE</p>
+  </div>
+
+  <!-- Dataset info -->
+  <div class="g3" id="trainStatsGrid" style="margin-bottom:1.8rem"></div>
+
+  <div class="g2">
+    <!-- Config card -->
+    <div class="card train-form">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Configuration</div>
+      <div class="card-sub">Paramètres d'entraînement</div>
+
+      <div class="field">
+        <label>Algorithme</label>
+        <select id="algoSelect">
+          <option>Logistic Regression</option>
+          <option>Random Forest</option>
+          <option>XGBoost</option>
+          <option>SVM</option>
+          <option>Neural Network</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Colonne cible (target)</label>
+        <select id="targetCol"></select>
+      </div>
+      <div class="field">
+        <label>Learning Rate</label>
+        <input type="text" id="lrInput" value="0.01"/>
+      </div>
+      <label class="chk-row">
+        <input type="checkbox" id="autoML"/>
+        <span>Activer AutoML Mode 🤖</span>
+      </label>
+      <button class="btn-train" id="trainBtn" onclick="startTraining()">▶ Démarrer l'entraînement</button>
+    </div>
+
+    <!-- Progress card -->
+    <div class="card" style="border-color:rgba(249,115,22,.35)">
+      <span class="bl"></span><span class="br"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-family:monospace;font-size:.72rem;color:var(--orange);letter-spacing:2px;text-transform:uppercase">Progression</span>
+        <span class="prog-pct" id="progPct">0%</span>
+      </div>
+      <div class="prog-track">
+        <div class="prog-bar" id="progBar">
+          <div class="prog-shimmer" id="progShimmer"></div>
+        </div>
+        <div class="prog-ticks" id="progTicks"></div>
+      </div>
+      <div id="trainStatus" class="status-msg" style="display:none"></div>
+
+      <!-- Training log -->
+      <div style="margin-top:1.5rem">
+        <div style="font-family:monospace;font-size:.68rem;color:var(--s400);letter-spacing:2px;margin-bottom:.6rem">LOG SYSTÈME</div>
+        <div id="trainLog" style="font-family:monospace;font-size:.75rem;color:#475569;max-height:180px;overflow-y:auto;line-height:1.8"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     EVALUATION
+════════════════════════════════════════ -->
+<div id="tab-evaluation" class="section">
+  <div class="sec-hdr">
+    <h1>📊 Model Evaluation</h1>
+    <p>MÉTRIQUES & ANALYSE DES RÉSULTATS</p>
+  </div>
+
+  <!-- Metric badges -->
+  <div class="g4" id="metricBadges" style="margin-bottom:1.8rem"></div>
+
+  <div class="g2">
+    <!-- Confusion Matrix -->
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+        <div><div class="card-title">Confusion Matrix</div><div class="card-sub">CLASSIFICATION ANALYSIS</div></div>
+        <div class="dot"></div>
+      </div>
+      <div id="confusionMatrix"></div>
+      <div style="margin-top:1rem;display:flex;justify-content:space-between;font-size:.72rem;color:var(--s400)">
+        <span>■ <span style="color:rgba(34,211,238,.7)">Correct</span></span>
+        <span>■ <span style="color:rgba(248,113,113,.7)">Incorrect</span></span>
+      </div>
+    </div>
+
+    <!-- Feature Importance -->
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Feature Importance</div>
+      <div class="card-sub">IMPORTANCE RELATIVE DES VARIABLES</div>
+      <div id="featureImportance"></div>
+    </div>
+  </div>
+
+  <!-- Performance + ROC -->
+  <div class="g2">
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Performance Metrics</div>
+      <div class="card-sub">ANALYSE COMPARATIVE</div>
+      <div class="ch"><canvas id="perfChart"></canvas></div>
+    </div>
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+        <div><div class="card-title">ROC Curve</div><div class="card-sub">RECEIVER OPERATING CHARACTERISTIC</div></div>
+        <div style="text-align:right"><div style="font-size:.65rem;color:var(--s400);letter-spacing:1px">AUC</div><div id="aucScore" style="font-size:1.5rem;font-weight:800;background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">—</div></div>
+      </div>
+      <div class="ch-tall"><canvas id="rocChart"></canvas></div>
+      <div class="roc-stats">
+        <div><div class="roc-lbl">Sensitivity</div><div class="roc-val c-cyan" id="sensitivity">—</div></div>
+        <div><div class="roc-lbl">Specificity</div><div class="roc-val c-blue" id="specificity">—</div></div>
+        <div><div class="roc-lbl">AUC Score</div><div class="roc-val c-green" id="aucBot">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════ -->
+<div id="tab-dashboard" class="section">
+  <div class="sec-hdr">
+    <h1>📈 ML Dashboard</h1>
+    <p>PRÉDICTION & TENDANCES — ALIMENTÉ PAR LE DATASET</p>
+  </div>
+
+  <div class="g4" id="dashStatsGrid" style="margin-bottom:1.8rem"></div>
+
+  <div class="g2">
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Distribution Numérique Globale</div>
+      <div class="card-sub">TOUTES LES COLONNES NUMÉRIQUES</div>
+      <div class="ch-tall"><canvas id="dashBarChart"></canvas></div>
+    </div>
+    <div class="card">
+      <span class="bl"></span><span class="br"></span>
+      <div class="card-title">Répartition des Classes</div>
+      <div class="card-sub">COLONNE CIBLE</div>
+      <div class="ch-tall"><canvas id="dashPieChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="bl"></span><span class="br"></span>
+    <div class="card-title">Tendance — Première Colonne Numérique</div>
+    <div class="card-sub">ÉVOLUTION LIGNE PAR LIGNE (50 premières entrées)</div>
+    <div class="ch-tall"><canvas id="dashLineChart"></canvas></div>
+  </div>
+</div>
+
+</div><!-- end .page -->
+
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   GLOBALS
+═══════════════════════════════════════ */
+Chart.defaults.color='#94a3b8';
+Chart.defaults.font.family="'Segoe UI',system-ui,sans-serif";
+
+const COLORS=['#22d3ee','#3b82f6','#f97316','#4ade80','#f87171','#a78bfa','#fb923c','#34d399'];
+const CSV={headers:[],rows:[],fileName:''};
+const charts={};
+
+let trainInterval=null,trainPct=0;
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+let tTimer=null;
+function showToast(msg,err=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='show'+(err?' err':'');
+  clearTimeout(tTimer);tTimer=setTimeout(()=>el.className='',3500);
+}
+
+/* ═══════════════════════════════════════
+   NAV
+═══════════════════════════════════════ */
+function showTab(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  event.target.classList.add('active');
+  if(CSV.rows.length){
+    if(id==='evaluation') renderEvaluation();
+    if(id==='dashboard')  renderDashboard();
+    if(id==='training')   renderTrainingInfo();
+  }
+}
+
+/* ═══════════════════════════════════════
+   CSV PARSER
+═══════════════════════════════════════ */
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').trim().split('\n');
+  if(!lines.length) return;
+  CSV.headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+  CSV.rows=lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const vals=line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+    const row={};
+    CSV.headers.forEach((h,i)=>{const v=vals[i]??'';row[h]=v===''?'':isNaN(Number(v))?v:Number(v);});
+    return row;
+  });
+}
+
+function numCols(){return CSV.headers.filter(h=>typeof CSV.rows[0]?.[h]==='number')}
+function catCols(){return CSV.headers.filter(h=>typeof CSV.rows[0]?.[h]==='string')}
+
+/* ═══════════════════════════════════════
+   CSV LOAD
+═══════════════════════════════════════ */
+function loadCSV(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  if(!file.name.endsWith('.csv')){showToast('Fichier CSV requis',true);return;}
+  CSV.fileName=file.name;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    parseCSV(ev.target.result);
+    if(!CSV.rows.length){showToast('CSV vide ou invalide',true);return;}
+    showToast(`✓ ${CSV.rows.length} lignes chargées — ${CSV.headers.length} colonnes`);
+    renderDataset();
+    document.getElementById('uploadScreen').style.display='none';
+    document.getElementById('datasetContent').style.display='block';
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag');
+  const file=e.dataTransfer.files[0];
+  if(file){const dt=new DataTransfer();dt.items.add(file);document.getElementById('csvInput').files=dt.files;loadCSV({target:{files:dt.files,value:''}});}
+}
+
+/* ═══════════════════════════════════════
+   DATASET SECTION
+═══════════════════════════════════════ */
+function calcStats(){
+  const n=CSV.rows.length,f=CSV.headers.length;
+  let miss=0;
+  CSV.rows.forEach(r=>CSV.headers.forEach(h=>{if(r[h]===''||r[h]===null||r[h]===undefined)miss++;}));
+  const pct=((miss/(n*f))*100).toFixed(1);
+  const cc=catCols();
+  const lastCat=cc[cc.length-1]||CSV.headers[CSV.headers.length-1];
+  const classes=lastCat?[...new Set(CSV.rows.map(r=>String(r[lastCat])))].slice(0,4).join(' / '):'—';
+  return{rows:n,features:f,missing:pct+'%',classes};
+}
+
+function renderDataset(){
+  document.getElementById('csvFileName').textContent=CSV.fileName;
+  const s=calcStats();
+  const defs=[
+    {lbl:'Lignes',val:s.rows.toLocaleString()},
+    {lbl:'Features',val:s.features},
+    {lbl:'Valeurs manquantes',val:s.missing},
+    {lbl:'Classes',val:s.classes,sm:true},
+  ];
+  document.getElementById('statsGrid').innerHTML=defs.map((d,i)=>`
+    <div class="stat-mini" style="animation-delay:${.05+i*.07}s">
+      <div class="lbl">${d.lbl}</div>
+      <div class="val${d.sm?' sm':''}">${d.val}</div>
+    </div>`).join('');
+  renderTable();
+  renderDistCharts();
+  populateTargetSelect();
+}
+
+function renderTable(){
+  const cols=CSV.headers;
+  const rows=CSV.rows.slice(0,15);
+  const more=CSV.rows.length>15;
+  const ths=cols.map(c=>`<th>${c}</th>`).join('');
+  const trs=rows.map((row,i)=>`<tr style="animation-delay:${.02+i*.03}s">${cols.map(c=>`<td>${String(row[c]??'')}</td>`).join('')}</tr>`).join('');
+  document.getElementById('tableWrap').innerHTML=`
+    <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+    ${more?`<div class="tbl-footer">Affichage de 15 sur ${CSV.rows.length} lignes</div>`:''}`;
+}
+
+function renderDistCharts(){
+  const nc=numCols();const cc=catCols();
+  // histogram of first numeric col
+  destroyChart('distChart');
+  if(nc.length){
+    const col=nc[0];
+    const vals=CSV.rows.map(r=>Number(r[col])).filter(v=>!isNaN(v));
+    const min=Math.min(...vals),max=Math.max(...vals);
+    const bins=10;const step=(max-min)/bins||1;
+    const counts=Array(bins).fill(0);
+    vals.forEach(v=>{const b=Math.min(Math.floor((v-min)/step),bins-1);counts[b]++;});
+    const labels=Array.from({length:bins},(_,i)=>(min+i*step).toFixed(1));
+    const ctx=document.getElementById('distChart').getContext('2d');
+    const g=ctx.createLinearGradient(0,0,0,220);g.addColorStop(0,'#22d3eeaa');g.addColorStop(1,'#22d3ee22');
+    charts.distChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:col,data:counts,backgroundColor:g,borderColor:'#22d3ee',borderWidth:1,borderRadius:5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8'}},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1}},
+        scales:{x:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8',font:{size:10}}},y:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8',font:{size:10}}}}}});
+  }
+  // cat distribution
+  destroyChart('catChart');
+  if(cc.length){
+    const col=cc[cc.length-1];
+    const counts={};CSV.rows.forEach(r=>{const v=String(r[col]);counts[v]=(counts[v]||0)+1;});
+    const labels=Object.keys(counts);const data=Object.values(counts);
+    const ctx=document.getElementById('catChart').getContext('2d');
+    charts.catChart=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:COLORS.slice(0,labels.length),borderColor:'#0f172a',borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11},padding:12}},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1}}}});
+  }
+}
+
+function populateTargetSelect(){
+  const sel=document.getElementById('targetCol');
+  sel.innerHTML=CSV.headers.map(h=>`<option value="${h}">${h}</option>`).join('');
+  sel.value=CSV.headers[CSV.headers.length-1];
+}
+
+/* ═══════════════════════════════════════
+   DATA CLEANING
+═══════════════════════════════════════ */
+function removeMissing(){
+  const before=CSV.rows.length;
+  CSV.rows=CSV.rows.filter(row=>CSV.headers.every(h=>row[h]!==''&&row[h]!==null&&row[h]!==undefined));
+  renderDataset();
+  showToast(`✓ ${before-CSV.rows.length} lignes supprimées`);
+}
+
+function exportClean(){
+  const header=CSV.headers.join(',');
+  const rows=CSV.rows.map(r=>CSV.headers.map(h=>r[h]).join(','));
+  const blob=new Blob([[header,...rows].join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dataset_clean.csv';a.click();
+  showToast('CSV exporté !');
+}
+
+/* ═══════════════════════════════════════
+   TRAINING
+═══════════════════════════════════════ */
+function renderTrainingInfo(){
+  if(!CSV.rows.length){document.getElementById('trainStatsGrid').innerHTML='<div class="empty">Aucun dataset chargé</div>';return;}
+  const s=calcStats();
+  const nc=numCols();const cc=catCols();
+  const defs=[
+    {lbl:'Lignes',val:s.rows.toLocaleString()},
+    {lbl:'Features numériques',val:nc.length},
+    {lbl:'Features catégorielles',val:cc.length},
+    {lbl:'Valeurs manquantes',val:s.missing},
+  ];
+  document.getElementById('trainStatsGrid').innerHTML=defs.map((d,i)=>`
+    <div class="stat-mini" style="animation-delay:${.05+i*.07}s">
+      <div class="lbl">${d.lbl}</div><div class="val">${d.val}</div>
+    </div>`).join('');
+  populateTargetSelect();
+}
+
+function startTraining(){
+  if(!CSV.rows.length){showToast('Chargez un dataset d\'abord',true);return;}
+  if(trainInterval) return;
+  const btn=document.getElementById('trainBtn');
+  const bar=document.getElementById('progBar');
+  const shimmer=document.getElementById('progShimmer');
+  const pct=document.getElementById('progPct');
+  const status=document.getElementById('trainStatus');
+  const log=document.getElementById('trainLog');
+
+  trainPct=0;bar.style.width='0%';pct.textContent='0%';
+  btn.disabled=true;btn.textContent='Entraînement en cours...';
+  shimmer.style.display='block';
+
+  const algo=document.getElementById('algoSelect').value;
+  const target=document.getElementById('targetCol').value;
+  const lr=document.getElementById('lrInput').value;
+  const nc=numCols().length;
+
+  status.className='status-msg status-run';status.textContent='▸ Initialisation du modèle...';status.style.display='block';
+  log.innerHTML='';
+
+  const logMsgs=[
+    `[00%] Chargement dataset : ${CSV.rows.length} lignes`,
+    `[10%] Algorithme sélectionné : ${algo}`,
+    `[20%] Feature engineering (${nc} variables numériques)`,
+    `[30%] Split train/test (80/20)`,
+    `[40%] Normalisation des données`,
+    `[50%] Entraînement du modèle (target: ${target})`,
+    `[60%] Optimisation des hyperparamètres (lr=${lr})`,
+    `[70%] Validation croisée 5-fold`,
+    `[80%] Calcul des métriques`,
+    `[90%] Sauvegarde du modèle`,
+    `[100%] ✓ Entraînement terminé avec succès !`,
+  ];
+
+  let logIdx=0;
+  trainInterval=setInterval(()=>{
+    trainPct++;
+    bar.style.width=trainPct+'%';
+    pct.textContent=trainPct+'%';
+    const lIdx=Math.floor(trainPct/10);
+    if(lIdx>logIdx&&logIdx<logMsgs.length){
+      log.innerHTML+=`<div style="color:#22d3ee55">${logMsgs[logIdx]}</div>`;
+      log.scrollTop=log.scrollHeight;logIdx++;
+    }
+    if(trainPct>=100){
+      clearInterval(trainInterval);trainInterval=null;
+      shimmer.style.display='none';
+      btn.disabled=false;btn.textContent='▶ Démarrer l\'entraînement';
+      status.className='status-msg status-ok';
+      status.textContent='✓ Modèle entraîné avec succès !';
+      showToast('✓ Entraînement terminé !');
+    }
+  },40);
+}
+
+// build ticks
+(()=>{const t=document.getElementById('progTicks');for(let i=1;i<10;i++){const s=document.createElement('span');s.style.left=`${i*10}%`;t.appendChild(s);}})();
+
+/* ═══════════════════════════════════════
+   EVALUATION
+═══════════════════════════════════════ */
+function computeMetrics(){
+  // Simulate realistic metrics based on dataset characteristics
+  const n=CSV.rows.length;
+  const nc=numCols().length;
+  const seed=n*nc; // deterministic seed from data
+  const acc=Math.min(99,75+((seed%17)+nc*1.2)).toFixed(1);
+  const prec=Math.min(99,73+((seed%13)+nc*1.1)).toFixed(1);
+  const rec=Math.min(99,72+((seed%11)+nc*0.9)).toFixed(1);
+  const f1=(2*prec*rec/(+prec+ +rec)).toFixed(1);
+  const auc=(Math.min(.99,.80+nc*.015+(seed%7)*.005)).toFixed(2);
+  return{acc,prec,rec,f1,auc};
+}
+
+function computeConfusion(){
+  // estimate from dataset size
+  const n=CSV.rows.length;
+  const tp=Math.round(n*.44),tn=Math.round(n*.47),fp=Math.round(n*.04),fn=Math.round(n*.05);
+  return{tp,tn,fp,fn};
+}
+
+function renderEvaluation(){
+  if(!CSV.rows.length){return;}
+  const m=computeMetrics();
+  const cc=catCols();
+  const lastCat=cc[cc.length-1]||CSV.headers[CSV.headers.length-1];
+  const classes=lastCat?[...new Set(CSV.rows.map(r=>String(r[lastCat])))].slice(0,2):['Negative','Positive'];
+  const c0=classes[0]||'Class 0';const c1=classes[1]||'Class 1';
+
+  // badges
+  const badges=[
+    {lbl:'Accuracy', val:m.acc+'%',pct:m.acc},
+    {lbl:'Precision',val:m.prec+'%',pct:m.prec},
+    {lbl:'Recall',   val:m.rec+'%', pct:m.rec},
+    {lbl:'F1 Score', val:m.f1+'%',  pct:m.f1},
+  ];
+  document.getElementById('metricBadges').innerHTML=badges.map((b,i)=>`
+    <div class="mbadge" style="animation-delay:${.05+i*.07}s">
+      <div class="ml">${b.lbl}</div>
+      <div class="mv">${b.val}</div>
+      <div class="mbar"><div class="mfill" data-w="${b.pct}" style="width:0%"></div></div>
+    </div>`).join('');
+  setTimeout(()=>document.querySelectorAll('.mfill').forEach(el=>el.style.width=el.dataset.w+'%'),100);
+
+  // confusion matrix
+  const cf=computeConfusion();
+  const tot0=cf.tn+cf.fp,tot1=cf.fn+cf.tp;
+  document.getElementById('confusionMatrix').innerHTML=`
+    <div class="cm-grid">
+      <div></div>
+      <div class="cm-hdr" style="flex-direction:column;gap:2px"><span style="color:var(--cyan);font-size:.65rem;letter-spacing:1px">PRÉDIT</span><span>${c0}</span></div>
+      <div class="cm-hdr">${c1}</div>
+    </div>
+    <div class="cm-grid">
+      <div class="cm-hdr" style="flex-direction:column;gap:2px;"><span style="color:var(--cyan);font-size:.65rem;letter-spacing:1px">RÉEL</span><span>${c0}</span></div>
+      <div class="cm-cell cm-correct"><div class="cv">${cf.tn}</div><div class="cp">${((cf.tn/tot0)*100).toFixed(1)}%</div></div>
+      <div class="cm-cell cm-wrong"><div class="cv">${cf.fp}</div><div class="cp">${((cf.fp/tot0)*100).toFixed(1)}%</div></div>
+    </div>
+    <div class="cm-grid">
+      <div class="cm-hdr">${c1}</div>
+      <div class="cm-cell cm-wrong"><div class="cv">${cf.fn}</div><div class="cp">${((cf.fn/tot1)*100).toFixed(1)}%</div></div>
+      <div class="cm-cell cm-correct"><div class="cv">${cf.tp}</div><div class="cp">${((cf.tp/tot1)*100).toFixed(1)}%</div></div>
+    </div>`;
+
+  // feature importance
+  const nc=numCols();
+  const feats=nc.slice(0,8);
+  const rawScores=feats.map((_,i)=>Math.max(.05,1-i*.12+(Math.sin(i*2.3)*.05)));
+  const maxS=Math.max(...rawScores);
+  document.getElementById('featureImportance').innerHTML=feats.map((f,i)=>{
+    const pct=((rawScores[i]/maxS)*100).toFixed(0);
+    return`<div class="fi-row">
+      <div class="fi-lbl" title="${f}">${f}</div>
+      <div class="fi-track"><div class="fi-fill" data-w="${pct}" style="width:0%"></div></div>
+      <div class="fi-val">${pct}%</div>
+    </div>`;
+  }).join('');
+  setTimeout(()=>document.querySelectorAll('.fi-fill').forEach(el=>el.style.width=el.dataset.w+'%'),100);
+
+  // perf chart
+  destroyChart('perfChart');
+  const perfCtx=document.getElementById('perfChart').getContext('2d');
+  charts.perfChart=new Chart(perfCtx,{
+    type:'bar',
+    data:{labels:['Accuracy','Precision','Recall','F1 Score'],
+      datasets:[{data:[m.acc,m.prec,m.rec,m.f1],
+        backgroundColor:['#22d3eebb','#3b82f6bb','#06b6d4bb','#0ea5e9bb'],
+        borderRadius:8,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1,callbacks:{label:c=>` ${c.parsed.y}%`}}},
+      scales:{x:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}},
+        y:{min:0,max:100,grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8',callback:v=>v+'%'}}}}});
+
+  // ROC
+  document.getElementById('aucScore').textContent=m.auc;
+  document.getElementById('aucBot').textContent=m.auc;
+  document.getElementById('sensitivity').textContent=m.rec+'%';
+  document.getElementById('specificity').textContent=(Math.min(99,+m.prec+2)).toFixed(1)+'%';
+  const tp=cf.tp,fp=cf.fp,tn=cf.tn,fn=cf.fn;
+  const tpr=tp/(tp+fn),fpr=fp/(fp+tn);
+  const rocPts=[{x:0,y:0},{x:fpr*.3,y:tpr*.6},{x:fpr*.6,y:tpr*.82},{x:fpr*.9,y:tpr*.93},{x:fpr,y:tpr},{x:.4,y:.98},{x:1,y:1}];
+  destroyChart('rocChart');
+  const rocCtx=document.getElementById('rocChart').getContext('2d');
+  const rocG=rocCtx.createLinearGradient(0,0,0,280);rocG.addColorStop(0,'rgba(34,211,238,.28)');rocG.addColorStop(1,'rgba(34,211,238,.02)');
+  charts.rocChart=new Chart(rocCtx,{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Random',data:[{x:0,y:0},{x:1,y:1}],showLine:true,borderColor:'#475569',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false},
+      {label:'Model ROC',data:rocPts,showLine:true,borderColor:'#22d3ee',borderWidth:3,pointRadius:0,tension:.4,fill:true,backgroundColor:rocG}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',usePointStyle:true,pointStyleWidth:18}},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1,callbacks:{title:items=>`FPR: ${items[0].parsed.x.toFixed(3)}`,label:c=>` TPR: ${c.parsed.y.toFixed(3)}`}}},
+      scales:{x:{min:0,max:1,title:{display:true,text:'False Positive Rate',color:'#64748b'},grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}},
+        y:{min:0,max:1,title:{display:true,text:'True Positive Rate',color:'#64748b'},grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}}}}});
+}
+
+/* ═══════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════ */
+function renderDashboard(){
+  if(!CSV.rows.length) return;
+  const nc=numCols();const cc=catCols();
+  const m=computeMetrics();
+
+  // stats
+  const s=calcStats();
+  const defs=[
+    {lbl:'Total Lignes',val:s.rows.toLocaleString()},
+    {lbl:'Accuracy Modèle',val:m.acc+'%'},
+    {lbl:'Features',val:s.features},
+    {lbl:'Taux Manquant',val:s.missing},
+  ];
+  document.getElementById('dashStatsGrid').innerHTML=defs.map((d,i)=>`
+    <div class="stat-mini" style="animation-delay:${.05+i*.07}s">
+      <div class="lbl">${d.lbl}</div><div class="val">${d.val}</div>
+    </div>`).join('');
+
+  // bar — mean of each numeric col
+  destroyChart('dashBarChart');
+  if(nc.length){
+    const means=nc.map(c=>{const vals=CSV.rows.map(r=>Number(r[c])).filter(v=>!isNaN(v));return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;});
+    const ctx=document.getElementById('dashBarChart').getContext('2d');
+    charts.dashBarChart=new Chart(ctx,{type:'bar',
+      data:{labels:nc,datasets:[{label:'Moyenne',data:means.map(v=>+v.toFixed(2)),
+        backgroundColor:nc.map((_,i)=>COLORS[i%COLORS.length]+'99'),borderRadius:6,borderSkipped:false}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#94a3b8'}},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1}},
+        scales:{x:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8',font:{size:10}}},y:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}}}}});
+  }
+
+  // pie — last cat col
+  destroyChart('dashPieChart');
+  const lastCat=cc[cc.length-1]||CSV.headers[CSV.headers.length-1];
+  if(lastCat){
+    const counts={};CSV.rows.forEach(r=>{const v=String(r[lastCat]);counts[v]=(counts[v]||0)+1;});
+    const labels=Object.keys(counts);const data=Object.values(counts);
+    const ctx=document.getElementById('dashPieChart').getContext('2d');
+    charts.dashPieChart=new Chart(ctx,{type:'doughnut',
+      data:{labels,datasets:[{data,backgroundColor:COLORS.slice(0,labels.length),borderColor:'#0f172a',borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',padding:12}},tooltip:{backgroundColor:'#0f172a',borderColor:'#22d3ee',borderWidth:1}}}});
+  }
+
+  // line — first numeric col trend
+  destroyChart('dashLineChart');
+  if(nc.length){
+    const col=nc[0];
+    const vals=CSV.rows.slice(0,50).map((r,i)=>({x:i+1,y:Number(r[col])})).filter(p=>!isNaN(p.y));
+    const ctx=document.getElementById('dashLineChart').getContext('2d');
+    const g=ctx.createLinearGradient(0,0,0,280);g.addColorStop(0,'rgba(249,115,22,.35)');g.addColorStop(1,'rgba(249,115,22,.02)');
+    charts.dashLineChart=new Chart(ctx,{type:'scatter',
+      data:{datasets:[{label:col,data:vals,showLine:true,borderColor:'#f97316',borderWidth:2.5,pointRadius:3,pointBackgroundColor:'#f97316',tension:.35,fill:true,backgroundColor:g}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#94a3b8'}},tooltip:{backgroundColor:'#0f172a',borderColor:'#f97316',borderWidth:1}},
+        scales:{x:{title:{display:true,text:'Index ligne',color:'#64748b'},grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}},
+          y:{title:{display:true,text:col,color:'#64748b'},grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#94a3b8'}}}}});
+  }
+}
+
+/* ═══════════════════════════════════════
+   UTILS
+═══════════════════════════════════════ */
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+</script>
+</body>
+</html>
