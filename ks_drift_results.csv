@@ -1,0 +1,17 @@
+feature,ks_stat,p_value,drifted
+year,1.0,0.0,True
+month,0.8816,0.0,True
+arr_flights,0.0415,0.0609,False
+arr_del15,0.0279,0.4081,False
+carrier_ct,,,False
+weather_ct,,,False
+nas_ct,,,False
+security_ct,,,False
+late_aircraft_ct,,,False
+arr_cancelled,,,False
+arr_diverted,,,False
+arr_delay,,,False
+carrier_delay,,,False
+weather_delay,,,False
+nas_delay,,,False
+security_delay,,,False
